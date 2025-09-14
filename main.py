@@ -1,7 +1,9 @@
 # main.py
 # -*- coding: utf-8 -*-
 
-import os, csv, datetime, threading
+import os
+import csv
+import datetime
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
@@ -10,26 +12,28 @@ from telegram.ext import (
 from telegram.constants import ParseMode
 from fpdf import FPDF
 from googletrans import Translator
-from keep_alive import keep_alive # <<<--- ይሄ መኖሩን እናረጋግጥ
+from keep_alive import keep_alive  # <<<--- የድር ሰርቨሩን ለማስጀመር
 
-# --- ቅድመ ዝግጅቶች ---
-# ቶክኑን እና ቻናል አይዲውን ከ Environment Variables እናንብብ
-# ይህንን በቀጥታ ኮዱ ላይ አናስቀምጥም!
+# --- የይዘት ፋይሎች ---
+from bot_content import NEWS_ARTICLES, PRESS_RELEASES, POLICY_INFO, SPECIAL_ANALYSIS
+
+# --- የሚስጥር ቁልፎችን ከ Environment Variables ማንበብ ---
+# ይህንን በቀጥታ ኮዱ ላይ አናስቀምጥም! Render ላይ እናስገባዋለን።
 TELEGRAM_API_TOKEN = os.environ.get("TELEGRAM_API_TOKEN")
 ADMIN_CHANNEL_ID = os.environ.get("ADMIN_CHANNEL_ID")
 
-# --- ወሳኝ ማሳሰቢያ! ---
-# Render ላይ ያለው የፋይል ሲስተም ቋሚ አይደለም።
+# ⚠️ ወሳኝ ማሳሰቢያ! ⚠️
+# Render ላይ ያለው የፋይል ሲስተም ቋሚ አይደለም (ephemeral)።
 # ይህ ማለት ከታች ያሉት ፋይሎች (members.csv, last_id.txt, ፎቶዎች)
-# ሰርቨሩ restart ሲሆን ይጠፋሉ። ለዘላቂ መፍትሄ እንደ Render Postgres ያለ ዳታቤዝ መጠቀም ይመከራል።
-# ለአሁኑ ግን ቦቱ እንዲሰራ እናድርገው።
+# ሰርቨሩ restart ሲሆን ወይም ሲተኛ ይጠፋሉ። ይህንን ችግር በዘላቂነት ለመፍታት
+# እንደ Render Postgres ያለ ዳታቤዝ መጠቀም ይመከራል። ለአሁኑ ግን ቦቱ እንዲሰራ እናድርገው።
 MEMBERS_CSV = "members.csv"
 ID_FILE = "last_id.txt"
 
-# ... (ከዚህ በታች ያለው ኮድህ እንዳለ ይቀጥላል) ...
-# (ከዚህ በፊት የነበረው ኮድህ ከዚህ በታች እንዳለ ይቆጠራል)
+# ... (ከዚህ በታች ያለው ያንተ የመጀመሪያ ኮድ ነው፣ ምንም አልተቀየረም) ...
+
 # የውይይት ደረጃዎች
-(PHOTO, NAME_AM, NAME_EN, DOB, GENDER, NATIONALITY, REGION_AM, SUB_CITY_AM, 
+(PHOTO, NAME_AM, NAME_EN, DOB, GENDER, NATIONALITY, REGION_AM, SUB_CITY_AM,
  WOREDA_AM, KEBELE, PHONE, EMAIL_CHOICE, EMAIL, SUPPORT_AMOUNT, CONFIRMATION) = range(15)
 
 # የፋይል ስሞች እና ቋሚ ተለዋዋጮች
@@ -41,9 +45,6 @@ REGIONS_KEYBOARD = [
     ['አፋር', 'ቤኒሻንጉል ጉሙዝ', 'ጋምቤላ'], ['ሲዳማ', 'ደቡብ ምዕራብ', 'ሐረሪ'],
     ['ድሬዳዋ']
 ]
-# ...(ከዚህ በፊት የነበረው ኮድህ በሙሉ እዚህ ጋር ይገባል)...
-# ...(generate_pdf, start_command, register_command, ወዘተ. ሁሉም)...
-# እኔ የምጨምረው ከታች ያለውን main() እና if __name__ == '__main__': የሚለውን ብቻ ነው
 
 # --- HELPER FUNCTIONS ---
 def get_next_id():
@@ -119,11 +120,6 @@ def generate_membership_pdf(ud):
     filename = f"EALPA_Form_{ud.get('id_number')}.pdf"; pdf.output(filename); return filename
 
 # --- GENERAL & INFO COMMANDS ---
-# ... (all your command functions like start_command, news_command, etc. go here) ...
-# ... (all your conversation handler functions like register_command, received_photo, etc. go here) ...
-# (እዚህ ጋር ምንም ነገር አንቀይርም)
-
-from bot_content import NEWS_ARTICLES, PRESS_RELEASES, POLICY_INFO, SPECIAL_ANALYSIS
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = "👋 ሰላም! ወደ ኢአልፓ ይፋዊ ቦት እንኳን በደህና መጡ!\n\nየሚፈልጉትን አገልግሎት ከታች ያሉትን ትዕዛዞች በመጠቀም ይምረጡ።\n\n/register - አባል ለመሆን\n/news - ዜናዎችን ለማየት\n/releases - ጋዜጣዊ መግለጫዎች\n/policies - የፓርቲውን ፖሊሲዎች ለማወቅ\n/analysis - ልዩ ትንታኔ ለማንበብ"
     await update.message.reply_text(help_text)
@@ -209,10 +205,13 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'photo_path' in context.user_data and os.path.exists(context.user_data['photo_path']): os.remove(context.user_data['photo_path'])
     context.user_data.clear(); await update.message.reply_text("ምዝገባው ተሰርዟል።", reply_markup=ReplyKeyboardRemove()); return ConversationHandler.END
 
+# --- ዋናውን የቦት ማስጀመሪያ ተግባር ---
+def main() -> None:
+    """ይህ ፈንክሽን ቦቱን ገንብቶ ያስጀምራል"""
+    if not TELEGRAM_API_TOKEN or not ADMIN_CHANNEL_ID:
+        print("❌ ስህተት: TELEGRAM_API_TOKEN እና ADMIN_CHANNEL_ID በ Environment Variables ውስጥ መቀመጥ አለባቸው።")
+        return
 
-# --- MAIN FUNCTION --- (ይህንን ክፍል እንቀይረዋለን)
-def run_bot():
-    """ይህ ፈንክሽን ቦቱን ያስጀምራል"""
     application = Application.builder().token(TELEGRAM_API_TOKEN).build()
 
     conv_handler = ConversationHandler(
@@ -237,14 +236,9 @@ def run_bot():
     application.add_handler(CommandHandler("policies", policy_command))
     application.add_handler(CallbackQueryHandler(button_handler))
 
-    print("Bot is starting polling...")
+    print("✅ የቴሌግራም ቦት እየተነሳ ነው (Polling)...")
     application.run_polling()
 
 if __name__ == '__main__':
-    if not TELEGRAM_API_TOKEN or not ADMIN_CHANNEL_ID:
-        print("ERROR: Environment variables TELEGRAM_API_TOKEN and ADMIN_CHANNEL_ID must be set.")
-    else:
-        # የ keep_alive ሰርቨሩን እናስጀምር
-        keep_alive()
-        # ቦቱን እናስጀምር
-        run_bot()
+    keep_alive()  # የድር ሰርቨሩን (ለUptimeRobot) ከበስተጀርባ ያስነሳል
+    main()        # የቴሌግራም ቦቱን ያስነሳል
