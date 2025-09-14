@@ -1,4 +1,5 @@
 python-telegram-bot==21.0.1
 fpdf2
+httpx==0.23.0
 googletrans==4.0.0-rc1
 Flask
